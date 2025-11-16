@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Studio Sampler</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+      }
+      body {
+        margin: 0;
+        font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, sans-serif;
+        display: grid;
+        place-items: center;
+        min-height: 100vh;
+        background: linear-gradient(135deg, #0f172a 0%, #1e293b 60%, #111827 100%);
+        color: #e5e7eb;
+      }
+      .container {
+        width: min(960px, 92vw);
+        padding: 24px;
+        border-radius: 16px;
+        backdrop-filter: blur(8px);
+        background: rgba(255, 255, 255, 0.06);
+        box-shadow: 0 10px 30px rgba(0,0,0,0.45);
+      }
+      header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 20px;
+      }
+      h1 {
+        font-size: 1.25rem;
+        margin: 0;
+        letter-spacing: 0.4px;
+      }
+      .controls {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        margin-bottom: 20px;
+      }
+      select, button {
+        appearance: none;
+        border: 1px solid rgba(255,255,255,0.2);
+        background: rgba(255,255,255,0.08);
+        color: inherit;
+        padding: 10px 14px;
+        border-radius: 10px;
+        font-weight: 600;
+      }
+      button.primary {
+        background: #22c55e;
+        border-color: #16a34a;
+        color: #0b2115;
+      }
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(12, minmax(0, 1fr));
+        gap: 8px;
+      }
+      .note-btn {
+        padding: 12px 8px;
+        border-radius: 10px;
+        border: 1px solid rgba(255,255,255,0.15);
+        background: rgba(255,255,255,0.08);
+        cursor: pointer;
+        font-weight: 700;
+        transition: transform 0.05s ease, background 0.2s ease, box-shadow 0.2s ease;
+      }
+      .note-btn:active, .note-btn.playing {
+        transform: scale(0.98);
+        background: rgba(34, 197, 94, 0.25);
+        box-shadow: 0 8px 20px rgba(34, 197, 94, 0.35);
+        border-color: rgba(34,197,94,0.8);
+      }
+      .footer {
+        margin-top: 16px;
+        font-size: 0.85rem;
+        opacity: 0.8;
+      }
+      a { color: #93c5fd; }
+      .status {
+        margin-top: 12px;
+        font-size: 0.9rem;
+        opacity: 0.9;
+      }
+      .report {
+        margin-top: 8px;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+        font-size: 0.85rem;
+        white-space: pre-wrap;
+        opacity: 0.9;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <header>
+        <h1>Rapid Audio Studio — Tone.js Sampler</h1>
+        <button id="unlock" class="primary">Unlock Audio</button>
+      </header>
+      <div class="controls">
+        <label>
+          Instrument
+          <select id="instrument"></select>
+        </label>
+        <button id="stopAll">Stop All</button>
+        <button id="validateAll">Validate All</button>
+        <button id="downloadJson">Download URL Pack JSON</button>
+        <button id="generateWavs">Generate 24 Test WAVs</button>
+        <button id="downloadGenerated">Download 24 Test WAVs (ZIP)</button>
+        <button id="downloadGeneratedFiles">Download 24 Test WAVs (files)</button>
+        <button id="uploadGenerated">Upload Generated WAVs to GitHub</button>
+        <div id="ghControls" style="margin-top:8px; display:flex; flex-wrap:wrap; gap:6px; align-items:center;">
+          <input id="ghOwner" type="text" placeholder="GitHub owner (e.g., shankarelavarasan)" style="flex:1 1 280px;" />
+          <input id="ghRepo" type="text" placeholder="Repo" value="studio-samples" style="flex:1 1 180px;" />
+          <input id="ghBranch" type="text" placeholder="Branch" value="main" style="flex:1 1 120px;" />
+          <input id="ghToken" type="password" placeholder="GitHub token (contents:write)" style="flex:1 1 280px;" />
+          <button id="uploadGenerated">Upload Generated WAVs</button>
+        </div>
+        <button id="showChecklist">Upload Checklist</button>
+        <!-- Direct GitHub Upload Controls -->
+        <input id="ghOwner" type="text" placeholder="GitHub owner (e.g., shankarelavarasan)" />
+        <input id="ghRepo" type="text" placeholder="Repo (e.g., studio-samples)" />
+        <input id="ghBranch" type="text" value="main" placeholder="Branch (e.g., main)" />
+        <input id="ghToken" type="password" placeholder="GitHub token (fine-grained, contents:write)" />
+        <label>
+          Upload Instrument
+          <select id="ghInstrument"></select>
+        </label>
+        <input id="ghFiles" type="file" accept=".wav" multiple />
+        <button id="uploadGithub">Upload to GitHub</button>
+      </div>
+      <div id="grid" class="grid"></div>
+      <div id="status" class="status"></div>
+      <div id="report" class="report"></div>
+      <div class="footer">
+        Samples served via jsDelivr CDN · Studio quality 44.1kHz / 24-bit · Multi-note support
+      </div>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
