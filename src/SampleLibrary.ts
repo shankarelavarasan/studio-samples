@@ -26,19 +26,22 @@ export type NoteName = typeof NOTES_24[number];
 // Default base URLs for jsDelivr CDN (explicit main branch)
 const PRIMARY_BASE = "https://cdn.jsdelivr.net/gh/shankarelavarasan/studio-samples@main/";
 const SECONDARY_BASE = "https://cdn.jsdelivr.net/gh/elavarasan-shankar/studio-samples@main/";
+// Also include raw.githubusercontent.com as a final fallback (bypasses CDN fragmentation/fragment issues)
+const RAW_PRIMARY_BASE = "https://raw.githubusercontent.com/shankarelavarasan/studio-samples/main/";
+const RAW_SECONDARY_BASE = "https://raw.githubusercontent.com/elavarasan-shankar/studio-samples/main/";
 
 // Dual base URLs per instrument (primary, fallback)
 export const PER_INST_BASES: Record<InstrumentName, string[]> = {
-  piano: [PRIMARY_BASE, SECONDARY_BASE],
-  guitar: [PRIMARY_BASE, SECONDARY_BASE],
-  kalimba: [PRIMARY_BASE, SECONDARY_BASE],
-  synth_bass: [PRIMARY_BASE, SECONDARY_BASE],
-  violin: [PRIMARY_BASE, SECONDARY_BASE],
-  flute: [PRIMARY_BASE, SECONDARY_BASE],
-  saxophone: [PRIMARY_BASE, SECONDARY_BASE],
-  trumpet: [PRIMARY_BASE, SECONDARY_BASE],
-  organ: [PRIMARY_BASE, SECONDARY_BASE],
-  marimba: [PRIMARY_BASE, SECONDARY_BASE],
+  piano: [PRIMARY_BASE, SECONDARY_BASE, RAW_PRIMARY_BASE, RAW_SECONDARY_BASE],
+  guitar: [PRIMARY_BASE, SECONDARY_BASE, RAW_PRIMARY_BASE, RAW_SECONDARY_BASE],
+  kalimba: [PRIMARY_BASE, SECONDARY_BASE, RAW_PRIMARY_BASE, RAW_SECONDARY_BASE],
+  synth_bass: [PRIMARY_BASE, SECONDARY_BASE, RAW_PRIMARY_BASE, RAW_SECONDARY_BASE],
+  violin: [PRIMARY_BASE, SECONDARY_BASE, RAW_PRIMARY_BASE, RAW_SECONDARY_BASE],
+  flute: [PRIMARY_BASE, SECONDARY_BASE, RAW_PRIMARY_BASE, RAW_SECONDARY_BASE],
+  saxophone: [PRIMARY_BASE, SECONDARY_BASE, RAW_PRIMARY_BASE, RAW_SECONDARY_BASE],
+  trumpet: [PRIMARY_BASE, SECONDARY_BASE, RAW_PRIMARY_BASE, RAW_SECONDARY_BASE],
+  organ: [PRIMARY_BASE, SECONDARY_BASE, RAW_PRIMARY_BASE, RAW_SECONDARY_BASE],
+  marimba: [PRIMARY_BASE, SECONDARY_BASE, RAW_PRIMARY_BASE, RAW_SECONDARY_BASE],
 };
 
 // Optional explicit per-instrument URL overrides (primary preference)
@@ -55,8 +58,17 @@ export function getNoteUrlCandidates(inst: InstrumentName, note: NoteName): stri
   if (explicit) {
     candidates.push(explicit);
   }
+  // Try both flat and nested (Capitalized) instrument folder variants
+  const encodedNote = encodeURIComponent(note);
+  const capFolder = inst
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (c) => c.toUpperCase())
+    .replace(/\s+/g, "");
   for (const base of bases) {
-    candidates.push(`${base}${inst}/${encodeURIComponent(note)}.wav`);
+    // flat: instrument/<note>.wav
+    candidates.push(`${base}${inst}/${encodedNote}.wav`);
+    // nested: instrument/Capitalized/<note>.wav (e.g., violin/Violin/C4.wav)
+    candidates.push(`${base}${inst}/${capFolder}/${encodedNote}.wav`);
   }
   return candidates;
 }
@@ -73,9 +85,16 @@ export function makeSampler(_inst: InstrumentName): Tone.Sampler {
 // HEAD-check a single URL
 async function head(url: string): Promise<{ ok: boolean; status: number }>{
   try {
-    const res = await fetch(url, { method: "HEAD" });
+    // Use a lightweight GET instead of HEAD to avoid CORS issues that can abort HEAD on some CDNs
+    const res = await fetch(url, {
+      method: "GET",
+      mode: "cors",
+      cache: "no-store",
+      credentials: "omit",
+    });
     return { ok: res.ok, status: res.status };
-  } catch {
+  } catch (err) {
+    console.error("URL check failed", url, err);
     return { ok: false, status: 0 };
   }
 }

@@ -174,17 +174,7 @@ validateAllBtn?.addEventListener("click", async () => {
   if (reportEl) reportEl.textContent = `${header}\n` + lines.join("\n");
 });
 
-function buildUrlPackJson() {
-  return JSON.stringify({
-    primaryBase: "https://cdn.jsdelivr.net/gh/shankarelavarasan/studio-samples@main/",
-    fallbackBase: "https://cdn.jsdelivr.net/gh/elavarasan-shankar/studio-samples@main/",
-    notes,
-    instruments: Object.fromEntries(instruments.map(inst => [
-      inst,
-      { urls: Object.fromEntries(notes.map(n => [n, `${inst}/${n}.wav`])) }
-    ]))
-  }, null, 2);
-}
+// Legacy buildUrlPackJson removed; see async buildUrlPackJson below which resolves absolute URLs via fallback logic.
 
 function download(filename: string, text: string) {
   const a = document.createElement("a");
@@ -196,10 +186,43 @@ function download(filename: string, text: string) {
   document.body.removeChild(a);
 }
 
-downloadJsonBtn?.addEventListener("click", () => {
-  const json = buildUrlPackJson();
-  download("instrument-pack.json", json);
-  statusEl && (statusEl.textContent = "Downloaded instrument-pack.json. Upload WAVs to the specified folders in your GitHub repo.");
+// Build instrument-pack.json with resolved absolute URLs using fallback logic
+async function buildUrlPackJson() {
+  const pack: any = { notes, instruments: {} };
+  for (const inst of instruments) {
+    const urls: Record<string, string> = {};
+    for (const n of notes) {
+      const r = await resolveNoteUrlWithFallback(inst, n as NoteName);
+      if (r.url) {
+        urls[n] = r.url;
+      } else {
+        // Prefer nested capitalized folder when building default URL
+        const encodedNote = encodeURIComponent(n);
+        const capFolder = inst
+          .replace(/_/g, " ")
+          .replace(/\b\w/g, (c) => c.toUpperCase())
+          .replace(/\s+/g, "");
+        urls[n] = `https://cdn.jsdelivr.net/gh/shankarelavarasan/studio-samples@main/${inst}/${capFolder}/${encodedNote}.wav`;
+      }
+    }
+    (pack.instruments as any)[inst] = { urls };
+  }
+  return JSON.stringify(pack, null, 2);
+}
+
+downloadJsonBtn?.addEventListener("click", async () => {
+  if (downloadJsonBtn) downloadJsonBtn.disabled = true;
+  statusEl && (statusEl.textContent = "Building instrument-pack.json…");
+  try {
+    const json = await buildUrlPackJson();
+    download("instrument-pack.json", json);
+    statusEl && (statusEl.textContent = "Downloaded instrument-pack.json (resolved URLs with fallbacks).");
+  } catch (e) {
+    console.error("Error building instrument-pack.json", e);
+    statusEl && (statusEl.textContent = "Error building instrument-pack.json. Check console.");
+  } finally {
+    if (downloadJsonBtn) downloadJsonBtn.disabled = false;
+  }
 });
 
 showChecklistBtn?.addEventListener("click", () => {
@@ -471,3 +494,64 @@ function downloadBlob(filename: string, blob: Blob) {
     document.body.removeChild(a);
   }, 0);
 }
+const autoFillAllBtn = document.querySelector<HTMLButtonElement>("#autoFillAll");
+autoFillAllBtn?.addEventListener("click", async () => {
+  if (!ghOwnerInput || !ghRepoInput || !ghBranchInput || !ghTokenInput) {
+    statusEl && (statusEl.textContent = "GitHub controls not ready. Fill owner/repo/branch/token.");
+    return;
+  }
+  const owner = ghOwnerInput.value.trim();
+  const repo = ghRepoInput.value.trim();
+  const branch = ghBranchInput.value.trim() || "main";
+  const token = ghTokenInput.value.trim();
+  if (!owner || !repo || !token) {
+    statusEl && (statusEl.textContent = "Fill GitHub owner, repo, branch, token.");
+    return;
+  }
+  statusEl && (statusEl.textContent = "Scanning all instruments for missing notes…");
+  const summaryLines: string[] = [];
+  let totalUploaded = 0;
+  for (const inst of instruments) {
+    const missing: string[] = [];
+    for (const n of notes) {
+      const r = await resolveNoteUrlWithFallback(inst, n as NoteName);
+      if (!r.url) missing.push(n);
+    }
+    if (missing.length === 0) {
+      summaryLines.push(`${inst}: all ${notes.length} notes OK`);
+      continue;
+    }
+    summaryLines.push(`${inst}: missing ${missing.length} → generating & uploading…`);
+    // Generate simple sine WAVs for missing notes
+    const genBlobs: Record<string, Blob> = {};
+    for (const note of missing) {
+      const buffer = await Tone.Offline(async () => {
+        const synth = new Tone.Synth({ oscillator: { type: "sine" }, envelope: { attack: 0.01, decay: 0.1, sustain: 0.4, release: 0.2 } }).toDestination();
+        synth.triggerAttackRelease(note, 0.8, 0);
+      }, 1);
+      const wavBlob = audioBufferToWavBlob(buffer);
+      genBlobs[note] = wavBlob;
+    }
+    // Upload each generated blob to GitHub under nested capitalized folder
+    const capFolder = inst.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()).replace(/\s+/g, "");
+    for (const note of Object.keys(genBlobs)) {
+      try {
+        const base64 = await blobToBase64(genBlobs[note]);
+        // IMPORTANT: pass raw note (with '#') to GitHub; uploadBlobToGitHub encodes internally
+        const path = `${inst}/${capFolder}/${note}.wav`;
+        const { ok, status, text } = await uploadBlobToGitHub({ owner, repo, branch, token, path, contentBase64: base64 });
+        if (ok) {
+          totalUploaded++;
+          summaryLines.push(`OK ${inst} ${note} → ${path}`);
+        } else {
+          summaryLines.push(`ERR ${inst} ${note} → ${status} ${text}`);
+        }
+        await new Promise(r => setTimeout(r, 150)); // rate-limit GitHub API calls
+      } catch (e:any) {
+        summaryLines.push(`ERR ${inst} ${note} → ${e?.message || e}`);
+      }
+    }
+  }
+  reportEl && (reportEl.textContent = summaryLines.join("\n"));
+  statusEl && (statusEl.textContent = `Auto-fill complete. Uploaded ${totalUploaded} generated WAVs. Now click Validate All.`);
+});
